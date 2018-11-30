@@ -1,0 +1,3 @@
+rootProject.name = 'JavaCppGradleTemplate'
+// subprojects list
+include 'cpplib1', 'cpplib2'

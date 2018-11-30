@@ -1,0 +1,141 @@
+//todo test run the jar
+//todo open source
+//todo readme
+//todo rename project JavaCppGradleTemplate
+
+
+// list of c++ subprojects
+// by default the list is pulled from the included subprojects in settings.gradle
+// if there are non-c++ subprojects, the c++ subprojects must be explicitly provided (def cppSubProjects = ["mylib1", "mylib2"])
+def cppSubProjects = subprojects.toList().collect( {s -> s.name} )
+
+
+// list of the javacpp classes to generate JNI for
+def javacpp = ["io.deephaven.javacppgradletemplate.StdDataStructures", "io.deephaven.javacppgradletemplate.MyNamespace1", "io.deephaven.javacppgradletemplate.MyNamespace2"]
+
+
+// Additional include and link directories needed to build the JNI
+def additionalIncludeDirs = []
+def additionalLinkDirs = []
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//// Java /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+apply plugin: 'java'
+
+
+repositories {
+    mavenCentral()
+}
+
+
+jar {
+    baseName = 'JavaCppGradleTemplate'
+    version = '0.1'
+}
+
+
+dependencies {
+    compile 'org.bytedeco:javacpp:1.4.3'
+    testCompile "junit:junit:4.12"
+}
+
+
+// make the c++ subprojects build before the java
+cppSubProjects.each { p ->
+    tasks.compileJava.dependsOn ":${p}:build"
+}
+
+
+tasks.withType(Test) {
+    systemProperty "java.library.path", jarRootDir()
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//// JNI  /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Gets the root directory for creating the jar file
+def jarRootDir() {
+    return "${projectDir}/build/classes/java/main/"
+}
+
+
+// Generate the command line args to run the JNI generation code
+def generateJniArgs(cppSubProjects, additionalIncludeDirs, additionalLinkDirs, classpath, javaCppClass) {
+
+    def args = [
+            '-cp', classpath.join(":"),
+            "-d", jarRootDir(),
+            ]
+
+    // include arguments
+    cppSubProjects.each{ p ->
+        args.addAll "-Xcompiler", "-I${projectDir}/${p}/src/main/headers"
+    }
+
+    additionalIncludeDirs.each { d ->
+        args.addAll "-Xcompiler", "-I${d}"
+    }
+
+    // linker arguments
+    args.addAll "-Xcompiler", "-L${jarRootDir()}"
+
+    additionalLinkDirs.each { d->
+        args.addAll "-Xcompiler", "-L${d}"
+    }
+
+    // javacpp class to generate code for
+    args.add javaCppClass
+
+    println args
+    return args as String[]
+}
+
+
+// Generate the JNI shared library from a JavaCpp class
+def generateJni(cppSubProjects, additionalIncludeDirs, additionalLinkDirs, javaCppClass) {
+    println "=== javacpp start: ${javaCppClass} ==="
+
+    javaexec {
+        main = 'org.bytedeco.javacpp.tools.Builder'
+        classpath sourceSets.main.output.classesDirs
+        classpath configurations.runtime
+        args generateJniArgs(cppSubProjects, additionalIncludeDirs, additionalLinkDirs, classpath, javaCppClass)
+    }
+
+    println "=== javacpp done: ${javaCppClass} ==="
+}
+
+
+// Generate all of the JNI libraries and add the C++ libs to the jar
+compileJava.doLast {
+
+    copy {
+        cppSubProjects.each { p ->
+            from("${projectDir}/${p}/build/lib/main/debug/") {
+                include '**/*.so'
+                include '**/*.dylib'
+            }
+        }
+
+        into jarRootDir()
+
+        // Flatten the hierarchy by setting the path
+        // of all files to their respective basename
+        // This gets rid of the directories containing the libs
+        eachFile {
+            path = name
+        }
+    }
+
+    javacpp.each { javaCppClass ->
+        generateJni(cppSubProjects, additionalIncludeDirs, additionalLinkDirs, javaCppClass)
+    }
+
+}
