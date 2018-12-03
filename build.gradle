@@ -1,8 +1,3 @@
-//todo test run the jar
-//todo open source
-//todo readme
-//todo rename project JavaCppGradleTemplate
-
 
 // list of c++ subprojects
 // by default the list is pulled from the included subprojects in settings.gradle
