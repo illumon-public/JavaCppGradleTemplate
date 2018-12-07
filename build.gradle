@@ -60,13 +60,28 @@ def jarRootDir() {
     return "${projectDir}/build/classes/java/main/"
 }
 
+// Gets the directory for shared libraries
+def libDir() {
+
+    def os
+
+    if(org.gradle.internal.os.OperatingSystem.current().isLinux()) {
+        os = "linux"
+    } else if(org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
+        os = "macosx"
+    } else {
+        throw new UnsupportedOperationException("Unsupported operating sytem: " + org.gradle.internal.os.OperatingSystem.current().name)
+    }
+
+    return jarRootDir() + "/io/deephaven/javacppgradletemplate/" + os + "-x86_64/"
+}
 
 // Generate the command line args to run the JNI generation code
 def generateJniArgs(cppSubProjects, additionalIncludeDirs, additionalLinkDirs, classpath, javaCppClass) {
 
     def args = [
             '-cp', classpath.join(":"),
-            "-d", jarRootDir(),
+            "-d", libDir(),
             ]
 
     // include arguments
@@ -79,7 +94,7 @@ def generateJniArgs(cppSubProjects, additionalIncludeDirs, additionalLinkDirs, c
     }
 
     // linker arguments
-    args.addAll "-Xcompiler", "-L${jarRootDir()}"
+    args.addAll "-Xcompiler", "-L${libDir()}"
 
     additionalLinkDirs.each { d->
         args.addAll "-Xcompiler", "-L${d}"
@@ -119,7 +134,7 @@ compileJava.doLast {
             }
         }
 
-        into jarRootDir()
+        into libDir()
 
         // Flatten the hierarchy by setting the path
         // of all files to their respective basename
